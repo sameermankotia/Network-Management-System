@@ -59,7 +59,11 @@ export function AppShell() {
 
   const openAlerts = alerts?.length ?? 0;
   const critical = alerts?.filter((alert) => alert.severity === 'Critical').length ?? 0;
-  const page = TITLES[location.pathname] ?? { title: 'Campus NMS', subtitle: '' };
+  const page =
+    TITLES[location.pathname] ??
+    (location.pathname.startsWith('/devices/')
+      ? { title: 'Device', subtitle: 'Live state, interfaces, diagnostics and alert history' }
+      : { title: 'Campus NMS', subtitle: '' });
 
   return (
     <div className="shell">

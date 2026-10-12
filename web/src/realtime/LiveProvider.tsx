@@ -1,6 +1,6 @@
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 import { useToasts } from '@/components/Toasts';
 import { getToken } from '@/lib/api';
@@ -111,40 +111,38 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, push, queryClient]);
 
-  const value = useMemo<LiveValue>(
-    () => ({
-      connected,
-      lastCycle,
-      watch: (deviceId, handler) => {
-        const handlers = handlersRef.current;
-        const existing = handlers.get(deviceId);
+  // Identity has to stay stable: cycle events land every few seconds, and a new
+  // watch function would make every subscriber tear down and lose its buffer.
+  const watch = useCallback<LiveValue['watch']>((deviceId, handler) => {
+    const handlers = handlersRef.current;
+    const existing = handlers.get(deviceId);
 
-        if (existing) {
-          existing.add(handler);
-        } else {
-          handlers.set(deviceId, new Set([handler]));
-          const connection = connectionRef.current;
-          if (connection?.state === HubConnectionState.Connected) {
-            void connection.invoke('WatchDevice', deviceId);
-          }
-        }
-
-        return () => {
-          const set = handlers.get(deviceId);
-          if (!set) return;
-          set.delete(handler);
-          if (set.size === 0) {
-            handlers.delete(deviceId);
-            const connection = connectionRef.current;
-            if (connection?.state === HubConnectionState.Connected) {
-              void connection.invoke('UnwatchDevice', deviceId);
-            }
-          }
-        };
+    if (existing) {
+      existing.add(handler);
+    } else {
+      handlers.set(deviceId, new Set([handler]));
+      const connection = connectionRef.current;
+      if (connection?.state === HubConnectionState.Connected) {
+        void connection.invoke('WatchDevice', deviceId);
       }
-    }),
-    [connected, lastCycle]
-  );
+    }
+
+    return () => {
+      const set = handlers.get(deviceId);
+      if (!set) return;
+
+      set.delete(handler);
+      if (set.size === 0) {
+        handlers.delete(deviceId);
+        const connection = connectionRef.current;
+        if (connection?.state === HubConnectionState.Connected) {
+          void connection.invoke('UnwatchDevice', deviceId);
+        }
+      }
+    };
+  }, []);
+
+  const value = useMemo<LiveValue>(() => ({ connected, lastCycle, watch }), [connected, lastCycle, watch]);
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
 }

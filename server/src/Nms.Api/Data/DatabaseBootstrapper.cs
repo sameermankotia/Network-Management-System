@@ -71,8 +71,8 @@ public class DatabaseBootstrapper(
 
     private async Task EnsureAdminAsync(CancellationToken ct)
     {
-        var email = config["Admin:Email"] ?? "admin@campus.edu";
-        if (await db.Users.AnyAsync(u => u.Email == email, ct))
+        var email = (config["Admin:Email"] ?? "admin@campus.edu").Trim().ToLowerInvariant();
+        if (await db.Users.AnyAsync(u => u.Email.ToLower() == email, ct))
         {
             return;
         }

@@ -62,7 +62,7 @@ on conflict (id) do nothing;
 insert into alert_rules (id, name, description, metric, comparison, threshold, duration_seconds, severity, target_kind, target_value, notify_channels)
 values
   ('44444444-0000-0000-0000-000000000001', 'Device unreachable',          'No ICMP response for two consecutive polls.',       'Reachability',          'LessThan',    1,  60,  'Critical', 'All',        null,       '{inapp,email}'),
-  ('44444444-0000-0000-0000-000000000002', 'Core device unreachable',     'Any core or edge device stops responding.',         'Reachability',          'LessThan',    1,  0,   'Critical', 'Tag',        'critical', '{inapp,email,webhook}'),
+  ('44444444-0000-0000-0000-000000000002', 'Core latency spike',          'Latency above 40 ms on a core or edge device.',     'Latency',               'GreaterThan', 40, 120, 'Major',    'Tag',        'critical', '{inapp,email,webhook}'),
   ('44444444-0000-0000-0000-000000000003', 'High latency',                'Round trip above 120 ms for two minutes.',          'Latency',               'GreaterThan', 120, 120, 'Warning',  'All',        null,       '{inapp}'),
   ('44444444-0000-0000-0000-000000000004', 'Packet loss',                 'Sustained loss above 2%.',                          'PacketLoss',            'GreaterThan', 2,   120, 'Major',    'All',        null,       '{inapp,email}'),
   ('44444444-0000-0000-0000-000000000005', 'Switch CPU saturated',        'CPU above 85% for five minutes.',                   'Cpu',                   'GreaterThan', 85,  300, 'Major',    'DeviceType', 'Switch',   '{inapp}'),

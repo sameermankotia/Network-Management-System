@@ -15,8 +15,6 @@ public class NmsDbContext(DbContextOptions<NmsDbContext> options) : DbContext(op
     public DbSet<AlertEvent> AlertEvents => Set<AlertEvent>();
     public DbSet<DiagnosticRun> DiagnosticRuns => Set<DiagnosticRun>();
     public DbSet<User> Users => Set<User>();
-    public DbSet<DailyAvailability> DailyAvailability => Set<DailyAvailability>();
-    public DbSet<HourlyInterfaceUtilization> HourlyInterfaceUtilization => Set<HourlyInterfaceUtilization>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -111,14 +109,8 @@ public class NmsDbContext(DbContextOptions<NmsDbContext> options) : DbContext(op
         {
             e.ToTable("users");
             e.HasKey(u => u.Id);
-            e.HasIndex(u => u.Email).IsUnique();
-            // The column is citext so uniqueness and lookups ignore case; EF
-            // sends it as plain text and lets Postgres do the comparison.
             e.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
         });
-
-        model.Entity<DailyAvailability>().ToView("device_availability_daily").HasNoKey();
-        model.Entity<HourlyInterfaceUtilization>().ToView("interface_utilization_hourly").HasNoKey();
 
         foreach (var entity in model.Model.GetEntityTypes())
         {

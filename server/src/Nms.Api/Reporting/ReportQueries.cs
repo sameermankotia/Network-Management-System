@@ -268,12 +268,12 @@ public class ReportQueries(SqlQuery sql)
     public Task<List<NamedSeries>> DailyAvailabilityAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken ct) =>
         BuildGroupedAsync(
             """
-            select d.site as series,
-                   date_trunc('day', s.sampled_at) as bucket,
-                   100.0 * count(*) filter (where s.reachable) / nullif(count(*), 0) as value
-            from device_samples s
-            join devices d on d.id = s.device_id
-            where s.sampled_at between @from and @to
+            select d.site                     as series,
+                   a.day                      as bucket,
+                   avg(a.availability_pct)    as value
+            from device_availability_daily a
+            join devices d on d.id = a.device_id
+            where a.day between @from and @to
             group by 1, 2
             order by 2
             """,

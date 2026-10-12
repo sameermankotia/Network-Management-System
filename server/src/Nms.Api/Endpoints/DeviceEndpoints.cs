@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Nms.Api.Alerting;
 using Nms.Api.Auth;
 using Nms.Api.Contracts;
 using Nms.Api.Data;
@@ -203,7 +204,7 @@ public static class DeviceEndpoints
             MaintenanceRequest request,
             NmsDbContext db,
             ClaimsPrincipal principal,
-            Alerting.BreachTracker tracker,
+            BreachTracker tracker,
             CancellationToken ct) =>
         {
             var device = await db.Devices.FindAsync([id], ct);

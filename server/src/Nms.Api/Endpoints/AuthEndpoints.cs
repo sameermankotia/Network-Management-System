@@ -14,7 +14,8 @@ public static class AuthEndpoints
 
         group.MapPost("/login", async (LoginRequest request, NmsDbContext db, TokenIssuer issuer, CancellationToken ct) =>
         {
-            var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email, ct);
+            var email = request.Email.Trim().ToLowerInvariant();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email, ct);
             if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             {
                 return Results.Problem("Invalid email or password.", statusCode: StatusCodes.Status401Unauthorized);

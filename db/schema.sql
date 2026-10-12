@@ -2,17 +2,20 @@
 -- the API at startup, so every statement here must be idempotent.
 
 create extension if not exists "uuid-ossp";
-create extension if not exists citext;
 
 create table if not exists users (
     id              uuid primary key default uuid_generate_v4(),
-    email           citext not null unique,
+    email           text not null,
     display_name    text not null,
     password_hash   text not null,
     role            text not null default 'operator' check (role in ('admin', 'operator', 'viewer')),
     created_at      timestamptz not null default now(),
     last_login_at   timestamptz
 );
+
+-- Sign-in is case-insensitive without reaching for citext, which a client would
+-- otherwise have to know about before its type cache is built.
+create unique index if not exists ux_users_email_lower on users (lower(email));
 
 create table if not exists devices (
     id                    uuid primary key default uuid_generate_v4(),
@@ -183,16 +186,3 @@ select device_id,
        max(latency_ms)                                     as peak_latency_ms
 from device_samples
 group by device_id, date_trunc('day', sampled_at);
-
-create or replace view interface_utilization_hourly as
-select i.id          as interface_id,
-       i.device_id,
-       date_trunc('hour', s.sampled_at) as hour,
-       avg(s.utilization_pct) as avg_utilization_pct,
-       max(s.utilization_pct) as peak_utilization_pct,
-       avg(s.in_mbps)         as avg_in_mbps,
-       avg(s.out_mbps)        as avg_out_mbps,
-       sum(s.in_errors + s.out_errors) as errors
-from interface_samples s
-join device_interfaces i on i.id = s.interface_id
-group by i.id, i.device_id, date_trunc('hour', s.sampled_at);

@@ -23,26 +23,3 @@ public class InterfaceSample
     public long OutErrors { get; set; }
     public double UtilizationPct { get; set; }
 }
-
-public class DailyAvailability
-{
-    public Guid DeviceId { get; set; }
-    public DateTimeOffset Day { get; set; }
-    public long Samples { get; set; }
-    public long ReachableSamples { get; set; }
-    public decimal? AvailabilityPct { get; set; }
-    public double? AvgLatencyMs { get; set; }
-    public double? PeakLatencyMs { get; set; }
-}
-
-public class HourlyInterfaceUtilization
-{
-    public Guid InterfaceId { get; set; }
-    public Guid DeviceId { get; set; }
-    public DateTimeOffset Hour { get; set; }
-    public double AvgUtilizationPct { get; set; }
-    public double PeakUtilizationPct { get; set; }
-    public double AvgInMbps { get; set; }
-    public double AvgOutMbps { get; set; }
-    public long Errors { get; set; }
-}
