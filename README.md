@@ -64,6 +64,16 @@ cd server && dotnet run --project src/Nms.Api
 cd web && npm install && npm run dev
 ```
 
+### Tests
+
+```bash
+cd server && dotnet test
+```
+
+They cover the parts worth pinning down without a database: rule targeting and
+threshold edges, poll scheduling, breach timing, and the bounds the synthetic
+telemetry has to respect.
+
 ## Monitoring real devices
 
 Set `Monitoring__Mode=live` and the poller sends real ICMP echo requests,
@@ -89,7 +99,7 @@ environment variables):
 
 ```
 db/            schema.sql and seed.sql (SQL-first; applied at startup)
-server/        ASP.NET Core API
+server/        ASP.NET Core API (src/Nms.Api, tests/Nms.Api.Tests)
   Domain/      entities and the rules that belong to them
   Data/        EF Core mapping and the startup bootstrapper
   Monitoring/  probes, telemetry, the poll loop, topology, diagnostics

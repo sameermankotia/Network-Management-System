@@ -22,13 +22,26 @@ public class AlertEngine(
         DateTimeOffset now,
         CancellationToken ct)
     {
-        foreach (var rule in rules.Where(r => r.Enabled && r.AppliesTo(device)))
+        var applicable = rules.Where(r => r.Enabled && r.AppliesTo(device)).ToList();
+        if (applicable.Count == 0)
+        {
+            return;
+        }
+
+        // One read of this device's open alerts for the whole cycle: each rule
+        // owns a distinct (rule, interface) slot, so nothing another rule opens
+        // here can change what this one finds.
+        var open = await db.Alerts
+            .Where(a => a.DeviceId == device.Id && a.State != AlertState.Resolved)
+            .ToListAsync(ct);
+
+        foreach (var rule in applicable)
         {
             if (rule.Metric == AlertMetric.InterfaceUtilization)
             {
                 foreach (var (iface, reading) in interfaces)
                 {
-                    await EvaluateOneAsync(device, rule, reading.UtilizationPct, iface, now, ct);
+                    await EvaluateOneAsync(device, rule, reading.UtilizationPct, iface, open, now, ct);
                 }
 
                 continue;
@@ -37,7 +50,7 @@ public class AlertEngine(
             var value = ReadMetric(rule.Metric, sample);
             if (value is not null)
             {
-                await EvaluateOneAsync(device, rule, value.Value, null, now, ct);
+                await EvaluateOneAsync(device, rule, value.Value, null, open, now, ct);
             }
         }
     }
@@ -128,16 +141,13 @@ public class AlertEngine(
         AlertRule rule,
         double value,
         DeviceInterface? iface,
+        List<Alert> openAlerts,
         DateTimeOffset now,
         CancellationToken ct)
     {
         var ifaceId = iface?.Id;
         var key = new BreachKey(rule.Id, device.Id, ifaceId);
-        var open = ifaceId is null
-            ? await db.Alerts.FirstOrDefaultAsync(
-                a => a.DeviceId == device.Id && a.RuleId == rule.Id && a.InterfaceId == null && a.State != AlertState.Resolved, ct)
-            : await db.Alerts.FirstOrDefaultAsync(
-                a => a.DeviceId == device.Id && a.RuleId == rule.Id && a.InterfaceId == ifaceId && a.State != AlertState.Resolved, ct);
+        var open = openAlerts.FirstOrDefault(a => a.RuleId == rule.Id && a.InterfaceId == ifaceId);
 
         if (!rule.IsBreached(value))
         {

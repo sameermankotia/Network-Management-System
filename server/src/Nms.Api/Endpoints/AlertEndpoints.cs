@@ -55,12 +55,14 @@ public static class AlertEndpoints
                 .Take(Math.Clamp(limit ?? 200, 1, 500))
                 .ToListAsync(ct);
 
+            var interfaceNames = await InterfaceNamesAsync(db, rows, ct);
+
             // Severity is stored as text, so the worst-first ordering the queue
             // needs is applied here rather than alphabetically in SQL.
             return Results.Ok(rows
                 .OrderByDescending(a => Rank(a.Severity))
                 .ThenByDescending(a => a.RaisedAt)
-                .Select(a => Map.Alert(a, a.Device?.Name ?? "Unknown"))
+                .Select(a => Map.Alert(a, a.Device?.Name ?? "Unknown", Name(interfaceNames, a)))
                 .ToList());
         });
 
@@ -83,7 +85,11 @@ public static class AlertEndpoints
                 .Select(Map.Event)
                 .ToList();
 
-            return Results.Ok(new AlertDetail(Map.Alert(alert, alert.Device?.Name ?? "Unknown"), timeline));
+            var interfaceNames = await InterfaceNamesAsync(db, [alert], ct);
+
+            return Results.Ok(new AlertDetail(
+                Map.Alert(alert, alert.Device?.Name ?? "Unknown", Name(interfaceNames, alert)),
+                timeline));
         });
 
         alerts.MapPost("/{id:guid}/acknowledge", async (
@@ -231,6 +237,24 @@ public static class AlertEndpoints
         }).RequireAuthorization("ManageInventory");
     }
 
+    /// Interface-scoped alerts store only the id, so names are resolved in one
+    /// lookup rather than by eager-loading a navigation on every read.
+    internal static async Task<Dictionary<Guid, string>> InterfaceNamesAsync(
+        NmsDbContext db,
+        IEnumerable<Alert> alerts,
+        CancellationToken ct)
+    {
+        var ids = alerts.Where(a => a.InterfaceId is not null).Select(a => a.InterfaceId!.Value).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await db.Interfaces
+            .Where(i => ids.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, i => i.Name, ct);
+    }
+
     internal static int Rank(AlertSeverity severity) => severity switch
     {
         AlertSeverity.Critical => 4,
@@ -238,6 +262,9 @@ public static class AlertEndpoints
         AlertSeverity.Warning => 2,
         _ => 1
     };
+
+    private static string? Name(IReadOnlyDictionary<Guid, string> names, Alert alert) =>
+        alert.InterfaceId is null ? null : names.GetValueOrDefault(alert.InterfaceId.Value);
 
     private static IResult? Validate(SaveRuleRequest request)
     {

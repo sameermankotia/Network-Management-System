@@ -144,7 +144,14 @@ public static class DeviceEndpoints
                 .Take(100)
                 .ToListAsync(ct);
 
-            return Results.Ok(alerts.Select(a => Map.Alert(a, a.Device?.Name ?? "Unknown")).ToList());
+            var interfaceNames = await AlertEndpoints.InterfaceNamesAsync(db, alerts, ct);
+
+            return Results.Ok(alerts
+                .Select(a => Map.Alert(
+                    a,
+                    a.Device?.Name ?? "Unknown",
+                    a.InterfaceId is null ? null : interfaceNames.GetValueOrDefault(a.InterfaceId.Value)))
+                .ToList());
         });
 
         group.MapPost("/", async (SaveDeviceRequest request, NmsDbContext db, CancellationToken ct) =>

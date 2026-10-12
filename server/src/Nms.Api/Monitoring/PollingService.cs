@@ -189,6 +189,8 @@ public class PollingService(
                 sample.OutMbps));
         }
 
+        Forget(devices.Select(d => d.Id).ToHashSet());
+
         await RefreshLinksAsync(db, ct);
         await PublishCycleAsync(db, devices, results.Count, now, started.ElapsedMilliseconds, ct);
         await PruneAsync(db, now, ct);
@@ -215,6 +217,17 @@ public class PollingService(
 
         var outcomes = await Task.WhenAll(tasks);
         return outcomes.ToList();
+    }
+
+    // Devices removed from inventory should not keep their poll bookkeeping alive.
+    private void Forget(HashSet<Guid> live)
+    {
+        foreach (var id in _lastPolled.Keys.Where(id => !live.Contains(id)).ToList())
+        {
+            _lastPolled.Remove(id);
+            _consecutiveFailures.Remove(id);
+            cache.Forget(id);
+        }
     }
 
     private DeviceStatus NextStatus(Device device, DeviceSample sample)
