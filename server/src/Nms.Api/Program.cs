@@ -42,7 +42,7 @@ builder.Services.AddScoped<DatabaseBootstrapper>();
 // real addresses. Resource counters stay synthetic until an SNMP collector is
 // wired into IResourceSampler.
 builder.Services.AddSingleton<SyntheticTelemetry>();
-if (config.GetValue("Monitoring:Mode", "synthetic").Equals("live", StringComparison.OrdinalIgnoreCase))
+if (string.Equals(config["Monitoring:Mode"], "live", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddSingleton<IDeviceProbe, IcmpDeviceProbe>();
 }

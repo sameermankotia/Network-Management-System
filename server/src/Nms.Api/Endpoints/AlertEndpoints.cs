@@ -186,7 +186,12 @@ public static class AlertEndpoints
             return Results.Ok(rule);
         }).RequireAuthorization("ManageInventory");
 
-        rules.MapPost("/{id:guid}/toggle", async (Guid id, NmsDbContext db, CancellationToken ct) =>
+        rules.MapPost("/{id:guid}/toggle", async (
+            Guid id,
+            NmsDbContext db,
+            AlertEngine engine,
+            ClaimsPrincipal principal,
+            CancellationToken ct) =>
         {
             var rule = await db.AlertRules.FindAsync([id], ct);
             if (rule is null)
@@ -198,13 +203,31 @@ public static class AlertEndpoints
             rule.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
 
-            return Results.Ok(new { rule.Id, rule.Enabled });
+            var released = rule.Enabled
+                ? 0
+                : await engine.ReleaseRuleAsync(id, principal.Actor(), $"Rule \"{rule.Name}\" was disabled", ct);
+
+            return Results.Ok(new { rule.Id, rule.Enabled, released });
         });
 
-        rules.MapDelete("/{id:guid}", async (Guid id, NmsDbContext db, CancellationToken ct) =>
+        rules.MapDelete("/{id:guid}", async (
+            Guid id,
+            NmsDbContext db,
+            AlertEngine engine,
+            ClaimsPrincipal principal,
+            CancellationToken ct) =>
         {
-            var removed = await db.AlertRules.Where(r => r.Id == id).ExecuteDeleteAsync(ct);
-            return removed == 0 ? Results.NotFound() : Results.NoContent();
+            var rule = await db.AlertRules.FindAsync([id], ct);
+            if (rule is null)
+            {
+                return Results.NotFound();
+            }
+
+            await engine.ReleaseRuleAsync(id, principal.Actor(), $"Rule \"{rule.Name}\" was deleted", ct);
+            db.AlertRules.Remove(rule);
+            await db.SaveChangesAsync(ct);
+
+            return Results.NoContent();
         }).RequireAuthorization("ManageInventory");
     }
 

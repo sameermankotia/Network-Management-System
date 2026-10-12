@@ -160,7 +160,7 @@ public class ReportQueries(SqlQuery sql)
         join device_interfaces i on i.id = s.interface_id
         join devices d on d.id = i.device_id
         where s.sampled_at between @from and @to
-          and (@device is null or i.device_id = @device)
+          and (@device::uuid is null or i.device_id = @device::uuid)
         group by i.id, i.device_id, d.name, i.name, i.speed_mbps
         order by avg(s.utilization_pct) desc
         """,
@@ -179,7 +179,7 @@ public class ReportQueries(SqlQuery sql)
         ct);
 
     public Task<List<TopTalkerRow>> TopTalkersAsync(DateTimeOffset from, DateTimeOffset to, int limit, CancellationToken ct) => sql.ListAsync(
-        """
+        $"""
         select d.id as device_id,
                d.name as device_name,
                avg(s.in_mbps)  as avg_in_mbps,
@@ -190,7 +190,7 @@ public class ReportQueries(SqlQuery sql)
         where s.sampled_at between @from and @to
         group by d.id, d.name
         order by avg(s.in_mbps + s.out_mbps) desc nulls last
-        limit @limit
+        limit {Clamp(limit)}
         """,
         r => new TopTalkerRow(
             r.Guid("device_id"),
@@ -198,19 +198,19 @@ public class ReportQueries(SqlQuery sql)
             Math.Round(r.DoubleOrZero("avg_in_mbps"), 2),
             Math.Round(r.DoubleOrZero("avg_out_mbps"), 2),
             Math.Round(r.DoubleOrZero("peak_mbps"), 2)),
-        new Dictionary<string, object?> { ["@from"] = from, ["@to"] = to, ["@limit"] = limit },
+        new Dictionary<string, object?> { ["@from"] = from, ["@to"] = to },
         ct);
 
     public Task<List<NamedSeries>> TopInterfaceSeriesAsync(DateTimeOffset from, DateTimeOffset to, int bucketSeconds, int limit, CancellationToken ct) =>
         BuildGroupedAsync(
-            """
+            $"""
             with busiest as (
                 select interface_id
                 from interface_samples
                 where sampled_at between @from and @to
                 group by interface_id
                 order by avg(utilization_pct) desc nulls last
-                limit @limit
+                limit {Clamp(limit)}
             )
             select d.name || ' · ' || i.name as series,
                    to_timestamp(floor(extract(epoch from s.sampled_at) / @bucket) * @bucket) as bucket,
@@ -223,7 +223,7 @@ public class ReportQueries(SqlQuery sql)
             group by 1, 2
             order by 2
             """,
-            Params(from, to, bucketSeconds, ("@limit", limit)),
+            Params(from, to, bucketSeconds),
             ct);
 
     public Task<List<UptimeRow>> AvailabilityAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken ct) => sql.ListAsync(
@@ -302,7 +302,7 @@ public class ReportQueries(SqlQuery sql)
         ct);
 
     public Task<List<RuleNoiseRow>> NoisiestRulesAsync(DateTimeOffset from, DateTimeOffset to, int limit, CancellationToken ct) => sql.ListAsync(
-        """
+        $"""
         select a.rule_id as rule_id,
                coalesce(r.name, 'Ad hoc') as rule_name,
                count(*) as alerts,
@@ -312,7 +312,7 @@ public class ReportQueries(SqlQuery sql)
         where a.raised_at between @from and @to
         group by a.rule_id, r.name
         order by count(*) desc
-        limit @limit
+        limit {Clamp(limit)}
         """,
         r =>
         {
@@ -323,11 +323,11 @@ public class ReportQueries(SqlQuery sql)
                 r.IntOrZero("alerts"),
                 r.IntOrZero("still_open"));
         },
-        new Dictionary<string, object?> { ["@from"] = from, ["@to"] = to, ["@limit"] = limit },
+        new Dictionary<string, object?> { ["@from"] = from, ["@to"] = to },
         ct);
 
     public Task<List<DeviceNoiseRow>> NoisiestDevicesAsync(DateTimeOffset from, DateTimeOffset to, int limit, CancellationToken ct) => sql.ListAsync(
-        """
+        $"""
         select d.id as device_id,
                d.name as device_name,
                count(*) as alerts,
@@ -342,7 +342,7 @@ public class ReportQueries(SqlQuery sql)
         where a.raised_at between @from and @to
         group by d.id, d.name
         order by count(*) desc
-        limit @limit
+        limit {Clamp(limit)}
         """,
         r => new DeviceNoiseRow(
             r.Guid("device_id"),
@@ -355,7 +355,7 @@ public class ReportQueries(SqlQuery sql)
                 2 => AlertSeverity.Warning,
                 _ => AlertSeverity.Info
             }),
-        new Dictionary<string, object?> { ["@from"] = from, ["@to"] = to, ["@limit"] = limit },
+        new Dictionary<string, object?> { ["@from"] = from, ["@to"] = to },
         ct);
 
     public async Task<(double Mtta, double Mttr)> ResponseTimesAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
@@ -427,6 +427,10 @@ public class ReportQueries(SqlQuery sql)
 
         return parameters;
     }
+
+    // LIMIT cannot be parameterised without an explicit cast, and these values
+    // are API-controlled integers, so clamp and inline them.
+    private static int Clamp(int limit) => Math.Clamp(limit, 1, 100);
 
     private static double? Round(double? value) => value is null ? null : Math.Round(value.Value, 2);
 

@@ -80,6 +80,36 @@ public class AlertEngine(
         return alert;
     }
 
+    /// Alerts raised by a rule can only clear while that rule still evaluates, so
+    /// disabling or deleting one has to close whatever it left open.
+    public async Task<int> ReleaseRuleAsync(Guid ruleId, string actor, string reason, CancellationToken ct)
+    {
+        var open = await db.Alerts
+            .Include(a => a.Device)
+            .Where(a => a.RuleId == ruleId && a.State != AlertState.Resolved)
+            .ToListAsync(ct);
+
+        if (open.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var alert in open)
+        {
+            CloseAlert(alert, actor, reason);
+            tracker.Clear(new BreachKey(ruleId, alert.DeviceId, alert.InterfaceId));
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        foreach (var alert in open)
+        {
+            await broadcaster.AlertChanged(Map.Alert(alert, alert.Device?.Name ?? "Unknown"));
+        }
+
+        return open.Count;
+    }
+
     public async Task<Alert?> CommentAsync(Guid alertId, string actor, string message, CancellationToken ct)
     {
         var alert = await db.Alerts.Include(a => a.Device).FirstOrDefaultAsync(a => a.Id == alertId, ct);

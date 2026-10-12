@@ -112,7 +112,8 @@ public class NmsDbContext(DbContextOptions<NmsDbContext> options) : DbContext(op
             e.ToTable("users");
             e.HasKey(u => u.Id);
             e.HasIndex(u => u.Email).IsUnique();
-            e.Property(u => u.Email).HasColumnType("citext");
+            // The column is citext so uniqueness and lookups ignore case; EF
+            // sends it as plain text and lets Postgres do the comparison.
             e.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
         });
 

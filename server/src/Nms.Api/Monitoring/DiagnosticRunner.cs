@@ -108,9 +108,16 @@ public class DiagnosticRunner(
 
     private async Task<(bool, string, object)> TraceRouteAsync(Device device, CancellationToken ct)
     {
+        // Nothing answers ICMP in synthetic mode, so go straight to the map.
+        if (!string.Equals(config["Monitoring:Mode"], "live", StringComparison.OrdinalIgnoreCase))
+        {
+            return await TopologyPathAsync(device, ct);
+        }
+
         var maxHops = config.GetValue("Monitoring:TraceRouteMaxHops", 12);
         var timeoutMs = config.GetValue("Monitoring:PingTimeoutMs", 1500);
         var hops = new List<object>();
+        var silent = 0;
 
         try
         {
@@ -132,6 +139,14 @@ public class DiagnosticRunner(
                 if (reply.Status is IPStatus.Success)
                 {
                     return (true, $"Reached {device.IpAddress} in {ttl} hop(s)", new { source = "icmp", hops });
+                }
+
+                // A few silent hops in a row means ICMP is filtered; there is no
+                // point burning a timeout per TTL to prove it.
+                silent = reply.Status is IPStatus.TimedOut ? silent + 1 : 0;
+                if (silent >= 3)
+                {
+                    return await TopologyPathAsync(device, ct);
                 }
             }
 

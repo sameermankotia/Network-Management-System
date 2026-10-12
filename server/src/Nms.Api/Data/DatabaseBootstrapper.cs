@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Nms.Api.Domain;
 
@@ -51,7 +52,20 @@ public class DatabaseBootstrapper(
         }
 
         var sql = await File.ReadAllTextAsync(path, ct);
-        await db.Database.ExecuteSqlRawAsync(sql, ct);
+
+        // Straight ADO rather than ExecuteSqlRaw: these scripts contain braces
+        // (array and jsonb literals) that EF would try to treat as format
+        // placeholders, and Npgsql runs the whole batch in one round trip.
+        var connection = db.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(ct);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(ct);
+
         log.LogInformation("Applied {File}", Path.GetFileName(path));
     }
 

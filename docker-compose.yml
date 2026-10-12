@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nms
+      POSTGRES_USER: nms
+      POSTGRES_PASSWORD: nms
+    ports:
+      - "5432:5432"
+    volumes:
+      - nms-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nms -d nms"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Nms: Host=db;Port=5432;Database=nms;Username=nms;Password=nms
+      Auth__SigningKey: local-dev-signing-key-change-me-please-32b
+      Cors__Origins: http://localhost:5173,http://localhost:8080
+      Monitoring__Mode: synthetic
+    ports:
+      - "5080:8080"
+
+  web:
+    build:
+      context: ./web
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+
+volumes:
+  nms-data:
